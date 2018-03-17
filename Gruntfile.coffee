@@ -1,12 +1,44 @@
-###
+#
 # Crafting Guide - Gruntfile.coffee
 #
-# Copyright (c) 2014 by Redwood Labs
+# Copyright © 2014-2016 by Redwood Labs
 # All rights reserved.
-###
+#
 
 fs = require 'fs'
-util = require 'util'
+
+EXTERNAL_LIBS = [
+    'backbone'
+    'jquery'
+    'marked'
+    'underscore'
+    'underscore.inflections'
+    'when'
+    './vendor/email.js:emailjs'
+]
+
+PUBLISHED_FILES = [
+    './client/models/base_model.coffee'
+    './client/models/game/inventory.coffee'
+    './client/models/game/item.coffee'
+    './client/models/game/item_slug.coffee'
+    './client/models/game/mod.coffee'
+    './client/models/game/mod_version.coffee'
+    './client/models/game/multiblock.coffee'
+    './client/models/game/recipe.coffee'
+    './client/models/game/stack.coffee'
+    './client/models/game/simple_stack.coffee'
+    './client/models/parsing/command_parser_version_base.coffee'
+    './client/models/parsing/mod_parser.coffee'
+    './client/models/parsing/mod_parser_v1.coffee'
+    './client/models/parsing/mod_version_parser.coffee'
+    './client/models/parsing/mod_version_parser_v1.coffee'
+    './client/models/parsing/versioned_parser_base.coffee'
+    './client/models/site/tutorial.coffee'
+    './common/constants.coffee'
+    './common/underscore.coffee'
+    './index.coffee'
+]
 
 ########################################################################################################################
 
@@ -15,59 +47,52 @@ module.exports = (grunt)->
     grunt.loadTasks tasks for tasks in grunt.file.expand './node_modules/grunt-*/tasks'
 
     grunt.config.init
-        browserify:
-            main:
-                options:
-                    ignore: ['jade']
-                    transform: ['coffeeify']
-                    browserifyOptions:
-                        debug: true
-                        extensions: ['.coffee']
-                files:
-                    './dist/js/main.js': ['./src/coffee/main.coffee']
 
-            markdown:
+        compress:
+            static:
                 options:
-                    browserifyOptions:
-                        debug: false
-                        standalone: 'markdown'
-                files:
-                    './dist/js/markdown.js': ['./node_modules/markdown/lib/index.js']
+                    mode: 'gzip'
+                files: [
+                    {expand: true, cwd:'./build/static', src:'**/*.css',     dest:'./dist/'}
+                    {expand: true, cwd:'./build/static', src:'**/*.html',    dest:'./dist/'}
+                    {expand: true, cwd:'./build/static', src:'**/*.ugly.js', dest:'./dist/', ext: '.js'}
+                    {expand: true, cwd:'./build/static', src:'**/*.json',    dest:'./dist/'}
+                    {expand: true, cwd:'./build/static', src:'**/*.ttf',     dest:'./dist/'}
+                    {expand: true, cwd:'./build/static', src:'**/*.txt',     dest:'./dist/'}
+                ]
 
-            when:
-                options:
-                    browserifyOptions:
-                        debug: false
-                        standalone: 'w'
-                files:
-                    './dist/js/when.js': ['./node_modules/when/when.js']
-
-        clean:
-            dist: ['./dist']
+        coffee:
+            npm_package:
+                options: {
+                    bare: true
+                }
+                files: [
+                    {expand:true, cwd:'./src', src:PUBLISHED_FILES, dest:'./dist', ext:'.js'}
+                ]
 
         copy:
-            jquery_ui_images:
-                files: [expand:true, cwd:'./lib/jquery-ui/images', src:['*.png'], dest:'./dist/css/images']
-            scripts:
-                files:
-                    './dist/js/backbone.js':   ['./node_modules/backbone/backbone.js']
-                    './dist/js/chai.js':       ['./node_modules/chai/chai.js']
-                    './dist/js/jade.js':       ['./node_modules/jade/runtime.js']
-                    './dist/js/jquery.js':     ['./node_modules/jquery/dist/jquery.js']
-                    './dist/js/jquery-ui.js':  ['./lib/jquery-ui/jquery-ui.js']
-                    './dist/js/mocha.js':      ['./node_modules/mocha/mocha.js']
-                    './dist/js/underscore.js': ['./node_modules/underscore/underscore.js']
-            styles:
-                files: [expand:true, cwd:'./src/css', src:'**/*.scss', dest:'./dist/src/css']
-            style_extras:
-                files:
-                    './dist/css/jquery-ui.css': ['./lib/jquery-ui/jquery-ui.min.css']
-                    './dist/css/mocha.css': ['./node_modules/mocha/mocha.css']
+            assets_build:
+                files: [
+                    {expand:true, cwd:'./assets/', src:'**/*', dest:'./build/static'}
+                ]
+            build_to_dist:
+                files: [
+                    {expand:true, cwd:'./build/static/', src:['**/*', '!**/*.map', '!**/*.js'], dest:'./dist'}
+                ]
+            common_source:
+                files: [
+                    {expand:true, cwd:'./src/common', src:'**/*.coffee', dest:'./build', ext:'.coffee'}
+                ]
+            server_source:
+                files: [
+                    {expand:true, cwd:'./src/server', src:'**/*.coffee', dest:'./build', ext:'.coffee'}
+                ]
 
-        exorcise:
-            main:
-                files:
-                    './dist/js/main.js.map': ['./dist/js/main.js']
+        clean:
+            assets:    ['./build/static/data', './build/static/images']
+            build:     ['./build']
+            dist:      ['./dist']
+            templates: ['./src/client/site/templates.js']
 
         jade:
             pages:
@@ -75,24 +100,26 @@ module.exports = (grunt)->
                     pretty: true
                 files: [
                     expand: true
-                    cwd: './src/jade'
-                    src: '*.jade'
-                    dest: './dist'
-                    ext: '.html'
+                    cwd:  './src/client/site'
+                    src:  '**/index.jade'
+                    dest: './build/static'
+                    ext:  '.html'
                 ]
-
             templates:
                 options:
                     client: true
                     node: true
-                    processName: (f)->
-                        f = f.replace './src/jade/templates/', ''
-                        f = f.replace '_view', ''
-                        f = f.replace '.jade', ''
-                        f = f.replace /\//g, '_'
-                        return f
+                    processName: (path)->
+                        pathElements = path.split '\/'
+                        while true
+                            element = pathElements.shift()
+                            break if element is 'site'
+                        pathElements.pop()
+                        name = pathElements.join '/'
+                        name = name.replace '.jade', ''
+                        return name
                 files:
-                    './src/coffee/views.js': ['./src/jade/templates/**/*.jade']
+                    './src/client/site/templates.js': ['./src/client/site/**/!(index)*.jade']
 
         mochaTest:
             options:
@@ -101,34 +128,23 @@ module.exports = (grunt)->
                 reporter: 'dot'
                 require: [
                     'coffee-script/register'
-                    './test/test_helper.coffee'
+                    './src/test_helper.coffee'
                 ]
                 verbose: true
-            src: ['./test/**/*.test.coffee']
-
-        rsync:
-            static:
-                options:
-                    src: './static/'
-                    dest: './dist/'
-                    recursive: true
-            non_html:
-                options:
-                    src: './static/'
-                    dest: './dist/'
-                    exclude: ['*.html']
-                    recursive: true
+            src: ['./src/**/*.test.coffee']
 
         sass:
-            build:
+            all:
                 files:
-                    './dist/css/main.css': ['./src/scss/main.scss']
-            dist:
-                options:
-                    sourcemap: 'none'
-                    style: 'compressed'
+                    './build/static/main.css': [ './build/imports.scss' ]
+
+        sass_globbing:
+            all:
                 files:
-                    './dist/css/main.css': ['./src/scss/main.scss']
+                    './build/imports.scss': [
+                        './src/client/styles/main.scss'
+                        './src/client/site/**/*.scss'
+                    ]
 
         uglify:
             scripts:
@@ -136,39 +152,153 @@ module.exports = (grunt)->
                     maxLineLen: 20
                 files: [
                     expand: true
-                    cwd: './dist/js'
-                    src: '**/*.js'
-                    dest: './dist/js'
+                    cwd:  './build/static'
+                    src:  '**/*.js'
+                    dest: './build/static'
+                    ext:  '.ugly.js'
                 ]
 
         watch:
-            static:
-                files: ['./static/**/*.cg', './static/**/*.txt']
-                tasks: ['rsync:static']
-            coffee:
-                files: ['./src/**/*.coffee']
-                tasks: ['browserify:main']
-            jade:
-                files: ['./src/**/*.jade']
-                tasks: ['jade:pages', 'jade:templates', 'browserify:main']
+            assets:
+                files: ['./assets/**/*']
+                tasks: ['copy:assets_build']
+            client_source:
+                files: ['./src/{client,common}/**/*.coffee']
+                tasks: ['browserify:internal']
+            server_source:
+                files: ['./src/{common,server}/**/*.coffee']
+                tasks: ['copy:server_source']
+            jade_pages:
+                files: ['./src/**/index.jade']
+                tasks: ['jade:pages']
+            jade_templates:
+                files: ['./src/**/!(index).jade']
+                tasks: ['jade:templates', 'browserify:internal']
             sass:
                 files: ['./src/**/*.scss']
-                tasks: ['sass', 'copy:styles']
+                tasks: ['sass']
+            test:
+                files: ['./src/**/*.coffee', './src/**/*.js', './test/**/*.coffee']
+                tasks: ['script:clear', 'test']
 
-    grunt.registerTask 'default', 'build'
+    # Compound Tasks ###################################################################################################
 
-    grunt.registerTask 'build', [ 'rsync:non_html', 'copy', 'sass:build', 'jade', 'browserify', 'exorcise' ]
+    grunt.registerTask 'build', 'build the project to be run from a local server',
+        ['jade', 'build:copy', 'build:css', 'browserify:external', 'browserify:internal']
 
-    grunt.registerTask 'dist', ['test', 'clean', 'build', 'rsync:static', 'sass:dist', 'uglify']
+    grunt.registerTask 'build:copy', 'helper task for build',
+        ['copy:assets_build', 'copy:common_source', 'copy:server_source']
 
-    grunt.registerTask 'clean-watch', ['clean', 'build', 'watch']
+    grunt.registerTask 'build:css', 'helper task for build',
+        ['sass_globbing', 'sass']
 
-    grunt.registerTask 'use-local-deps', ->
-        grunt.file.mkdir './node_modules'
-        grunt.file.delete './node_modules/crafting-guide-common', force:true
-        fs.symlinkSync '../../crafting-guide-common/', './node_modules/crafting-guide-common'
+    grunt.registerTask 'default', 'rebuild the project from scratch and start a local HTTP server',
+        ['clean', 'start']
 
-    grunt.registerTask 'test', ['mochaTest']
+    grunt.registerTask 'deploy', 'deploy to both staging and production via CircleCI',
+        ['deploy:staging', 'deploy:prod']
+
+    grunt.registerTask 'deploy:prod', 'deploy the project to production via CircleCI',
+        ['script:deploy:prod']
+
+    grunt.registerTask 'deploy:staging', 'deploy the project to staging via CircleCI',
+        ['script:deploy:staging']
+
+    grunt.registerTask 'dist', 'build the project to be run from Amazon S3',
+        ['build', 'copy:build_to_dist', 'uglify', 'compress']
+
+    grunt.registerTask 'prepublish', 'build the project to be published to NPM as shared code',
+        ['clean', 'coffee']
+
+    grunt.registerTask 'publish', 'publish the project to NPM',
+        ['prepublish', 'script:publish', 'clean', 'build']
+
+    grunt.registerTask 'start', 'build the project and start a local HTTP server',
+        ['build', 'script:start']
+
+    grunt.registerTask 'test', 'run unit tests',
+        ['mochaTest']
+
+    grunt.registerTask 'upload:prod', 'upload the project to the production Amazon S3 environment',
+        ['dist', 'script:s3_upload:prod']
+
+    grunt.registerTask 'upload:staging', 'upload the project the staging Amazon S3 environment',
+        ['dist', 'script:s3_upload:staging']
+
+    grunt.registerTask 'useLocalDeps', 'use local dependencies instead of NPM dependencies',
+        ['script:use_local_deps']
+
+    # Code Tasks #######################################################################################################
+
+    grunt.registerTask 'browserify:external', "Bundle 3rd-party libraries used in the app", ->
+        grunt.file.mkdir './build/static'
+        done = this.async()
+
+        args = [].concat ("--require=#{lib}" for lib in EXTERNAL_LIBS), [
+            '--outfile=./build/static/external.js'
+        ]
+
+        options = cmd:'browserify', args:args
+        grunt.util.spawn options, (error)->
+            console.log error if error?
+            done()
+
+    grunt.registerTask 'browserify:internal', "Bundle source files needed in the browser", ->
+        grunt.file.mkdir './build/static'
+        done = this.async()
+
+        libs = []
+        for lib in EXTERNAL_LIBS
+            parts = lib.split ':'
+            libs.push parts[parts.length-1]
+
+        args = [].concat ("--external=#{lib}" for lib in libs), [
+            '--extension=.coffee'
+            '--outfile=./build/static/internal.js'
+            '--transform=coffeeify'
+            './src/client/client.coffee'
+        ]
+
+        options = cmd:'browserify', args:args
+        grunt.util.spawn options, (error)->
+            console.log error if error?
+            done()
+
+    # Script Tasks #####################################################################################################
+
+    grunt.registerTask 'script:clear', "clear the current terminal buffer", ->
+      done = this.async()
+      grunt.util.spawn cmd:'clear', opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:deploy:prod', "deploy code by copying to the production branch", ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/deploy', args:['--prod'], opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:deploy:staging', "deploy code by copying to the staging branch", ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/deploy', args:['--staging'], opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:publish', 'publishes this package to NPM', ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/publish', opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:s3_upload:prod', 'uploads all static content to S3', ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/s3_upload', args:['--prod'], opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:s3_upload:staging', 'uploads all static content to S3', ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/s3_upload', args:['--staging'], opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:start', "start a local HTTP server on port 8080", ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/start', opts:{stdio:'inherit'}, (error)-> done(error)
+
+    grunt.registerTask 'script:use_local_deps', "use local dependencies instead of NPM dependencies", ->
+      done = this.async()
+      grunt.util.spawn cmd:'./scripts/use_local_deps', opts:{stdio:'inherit'}, (error)-> done(error)
+
+    # Command-Line Argument Processing #################################################################################
 
     args = process.argv[..]
     while args.length > 0
